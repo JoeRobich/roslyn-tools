@@ -4,14 +4,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
 using Microsoft.TeamFoundation.Build.WebApi;
-using Microsoft.TeamFoundation.Client.CommandLine;
-using Microsoft.TeamFoundation.Common;
 using Microsoft.TeamFoundation.SourceControl.WebApi;
 using Microsoft.VisualStudio.Services.WebApi;
 
@@ -21,11 +18,11 @@ namespace Roslyn.Insertion
     {
         private const string PRBuildTagPrefix = "PRNumber:";
 
-        public static readonly Guid VSRepoId = new Guid("a290117c-5a8a-40f7-bc2c-f14dbe3acf6d");
+        public static readonly Guid VSRepoId = new("a290117c-5a8a-40f7-bc2c-f14dbe3acf6d");
         //Easiest way to get these GUIDs is to create a PR search in AzDo
         //You'll get something like https://dev.azure.com/devdiv/DevDiv/_git/VS/pullrequests?_a=active&createdBy=GUID-here
-        public static readonly Guid MLInfraSwatUserId = new Guid("6c25b447-1d90-4840-8fde-d8b22cb8733e");
-        public static readonly Guid VSLSnapUserId = new Guid("9f64bc2f-479b-429f-a665-fec80e130b1f");
+        public static readonly Guid MLInfraSwatUserId = new("6c25b447-1d90-4840-8fde-d8b22cb8733e");
+        public static readonly Guid VSLSnapUserId = new("9f64bc2f-479b-429f-a665-fec80e130b1f");
 
         private static List<string> WarningMessages { get; } = new List<string>();
 
@@ -45,7 +42,13 @@ namespace Roslyn.Insertion
                 Console.WriteLine($"Verifying given authentication for {Options.VisualStudioRepoAzdoUri}");
                 try
                 {
-                    VisualStudioRepoConnection.Authenticate();
+                    await VisualStudioRepoConnection.ConnectAsync(cancellationToken);
+
+                    if (!VisualStudioRepoConnection.HasAuthenticated)
+                    {
+                        LogError($"Could not authenticate with {Options.VisualStudioRepoAzdoUri}");
+                        return (false, 0);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -61,7 +64,13 @@ namespace Roslyn.Insertion
                     Console.WriteLine($"Verifying given authentication for {Options.ComponentBuildAzdoUri}");
                     try
                     {
-                        ComponentBuildConnection.Authenticate();
+                        await ComponentBuildConnection.ConnectAsync(cancellationToken);
+
+                        if (!ComponentBuildConnection.HasAuthenticated)
+                        {
+                            LogError($"Could not authenticate with {Options.ComponentBuildAzdoUri}");
+                            return (false, 0);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -188,7 +197,6 @@ namespace Roslyn.Insertion
                     Console.WriteLine($"Updating Nuget Packages");
                     bool success;
                     (success, newPackageFiles) = UpdatePackages(
-                        buildVersion,
                         coreXT,
                         insertionArtifacts.GetPackagesDirectory(),
                         Options.SkipCoreXTPackages,
@@ -239,7 +247,7 @@ namespace Roslyn.Insertion
                 // *********** Update toolset ********************
                 if (Options.InsertToolset)
                 {
-                    UpdateToolsetPackage(coreXT, insertionArtifacts, buildVersion);
+                    UpdateToolsetPackage(coreXT, insertionArtifacts);
                     retainBuild = true;
                 }
 
@@ -534,8 +542,7 @@ namespace Roslyn.Insertion
 
         private static void UpdateToolsetPackage(
             CoreXT coreXT,
-            InsertionArtifacts artifacts,
-            BuildVersion buildVersion)
+            InsertionArtifacts artifacts)
         {
             Console.WriteLine("Updating toolset compiler package");
 
@@ -552,7 +559,7 @@ namespace Roslyn.Insertion
                 throw new Exception("Toolset package is not installed in this enlistment");
             }
 
-            UpdatePackage(previousPackageVersion, buildVersion, coreXT, package);
+            UpdatePackage(previousPackageVersion, coreXT, package);
         }
 
         public static string ToFullString(this XDocument document)
@@ -564,7 +571,7 @@ namespace Roslyn.Insertion
         {
             return removeNewlines(s1) == removeNewlines(s2);
 
-            string removeNewlines(string s) => s.Replace("\r\n", "").Replace("\n", "");
+            static string removeNewlines(string s) => s.Replace("\r\n", "").Replace("\n", "");
         }
 
         public static GitChange GetChangeOpt(string path, string originalText, string newText)
