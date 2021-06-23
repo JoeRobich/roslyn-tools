@@ -56,7 +56,7 @@ namespace Roslyn.Insertion
                 $"PLACEHOLDER INSERTION FOR {Options.InsertionName}",
                 "Not Specified",
                 Options.TitlePrefix,
-                reviewerId: MLInfraSwatUserId.ToString(),
+                reviewerId: Options.ReviewerGUID,
                 cancellationToken);
         }
     }
